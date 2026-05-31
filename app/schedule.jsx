@@ -1,195 +1,299 @@
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
-
+import React from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import { useClasses } from "../store/ClassContext";
+import COLORS from "../constants/colors";
+import AddClassModal from "../components/AddClassModal";
+import React, { useState } from "react";
 export default function ScheduleScreen() {
+  const { classes, getAttendanceRate, getTodaysClasses } = useClasses();
+  const [modalVisible, setModalVisible] = useState(false); // ← add this line
+
+  const todaysClasses = getTodaysClasses();
+
+  // Fallback: if nothing is scheduled today, show all classes instead
+  const displayClasses = todaysClasses.length > 0 ? todaysClasses : classes;
+  const isShowingAll = todaysClasses.length === 0;
+
+  // Get the current date formatted nicely for the header
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  function getAttendanceBadge(cls) {
+    const rate = getAttendanceRate(cls);
+    if (rate === null) return null; // no history yet, show nothing
+
+    if (rate >= 80) {
+      return { label: `${rate}% attendance`, bg: COLORS.successLight, color: COLORS.success };
+    } else if (rate >= 60) {
+      return { label: `${rate}% attendance ⚠️`, bg: COLORS.warningLight, color: COLORS.warning };
+    } else {
+      return { label: `${rate}% attendance — at risk`, bg: COLORS.dangerLight, color: COLORS.danger };
+    }
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.wrapper}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.pageTitle}>Tuesday, Jan 21</Text>
-        <Text style={styles.pageSubtitle}>3 classes today</Text>
-      </View>
+      <AddClassModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+      />
 
-      {/* Class 1 */}
-      <View style={styles.classRow}>
-        <View style={styles.timeColumn}>
-          <Text style={styles.timeText}>8:00</Text>
-          <Text style={styles.ampmText}>AM</Text>
-          <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
-          <View style={styles.line} />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Schedule</Text>
+          <Text style={styles.headerDate}>{today}</Text>
         </View>
-        <View style={styles.classCard}>
-          <Text style={styles.className}>Calculus II</Text>
-          <View style={styles.classMeta}>
-            <Ionicons name="location-outline" size={13} color={Colors.textSecondary} />
-            <Text style={styles.classMetaText}>Room 204-A · MATH 201</Text>
-          </View>
-          <View style={styles.badgeOk}>
-            <Text style={styles.badgeOkText}>✓ Attended last 4 classes</Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Class 2 */}
-      <View style={styles.classRow}>
-        <View style={styles.timeColumn}>
-          <Text style={styles.timeText}>10:30</Text>
-          <Text style={styles.ampmText}>AM</Text>
-          <View style={[styles.dot, { backgroundColor: Colors.danger }]} />
-          <View style={styles.line} />
-        </View>
-        <View style={styles.classCard}>
-          <Text style={styles.className}>Intro to CS</Text>
-          <View style={styles.classMeta}>
-            <Ionicons name="location-outline" size={13} color={Colors.textSecondary} />
-            <Text style={styles.classMetaText}>Lab 3, Eng Bldg · CS 101</Text>
+        {isShowingAll && (
+          <View style={styles.noClassBanner}>
+            <Text style={styles.noClassText}>
+              📭 No classes scheduled today — showing full schedule
+            </Text>
           </View>
-          <View style={styles.missedBadge}>
-            <Ionicons name="alert-triangle-outline" size={13} color={Colors.danger} />
-            <Text style={styles.missedBadgeText}>Missed 3 Tuesdays · +2 reminders set</Text>
-          </View>
-        </View>
-      </View>
+        )}
 
-      {/* Class 3 */}
-      <View style={styles.classRow}>
-        <View style={styles.timeColumn}>
-          <Text style={styles.timeText}>2:00</Text>
-          <Text style={styles.ampmText}>PM</Text>
-          <View style={[styles.dot, { backgroundColor: '#1D9E75' }]} />
-        </View>
-        <View style={styles.classCard}>
-          <Text style={styles.className}>Technical Writing</Text>
-          <View style={styles.classMeta}>
-            <Ionicons name="location-outline" size={13} color={Colors.textSecondary} />
-            <Text style={styles.classMetaText}>Rm 101-B · ENG 310</Text>
+        {displayClasses.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>No classes yet. Tap + to add one!</Text>
           </View>
-          <View style={styles.badgeClass}>
-            <Text style={styles.badgeClassText}>Task due before this</Text>
-          </View>
-        </View>
-      </View>
+        ) : (
+          displayClasses.map((cls, index) => {
+            const badge = getAttendanceBadge(cls);
+            return (
+              <View key={cls.id} style={styles.timelineRow}>
+                <View style={styles.timeColumn}>
+                  <Text style={styles.timeText}>{cls.startTime}</Text>
+                  <Text style={styles.timeTextEnd}>{cls.endTime}</Text>
+                </View>
+                <View style={styles.lineColumn}>
+                  <View style={[styles.dot, { backgroundColor: cls.color }]} />
+                  {index < displayClasses.length - 1 && (
+                    <View style={styles.verticalLine} />
+                  )}
+                </View>
+                <View style={[styles.classCard, { borderLeftColor: cls.color }]}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.className}>{cls.name}</Text>
+                    <Text style={styles.courseCode}>{cls.courseCode}</Text>
+                  </View>
+                  <Text style={styles.roomText}>📍 {cls.room}</Text>
+                  <Text style={styles.daysText}>🗓 {cls.days.join(", ")}</Text>
+                  {badge && (
+                    <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.badgeText, { color: badge.color }]}>
+                        {badge.label}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })
+        )}
 
-    </ScrollView>
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* ── Floating "+" Button ── */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setModalVisible(true)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   content: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 56,
   },
+
+  // Header
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
   },
-  pageSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+  headerDate: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
-  classRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 8,
+
+  // No-class banner
+  noClassBanner: {
+    backgroundColor: COLORS.warningLight,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
   },
+  noClassText: {
+    fontSize: 13,
+    color: COLORS.warning,
+    fontWeight: "500",
+  },
+
+  // Timeline row (time + line + card)
+  timelineRow: {
+    flexDirection: "row",
+    marginBottom: 20,
+    alignItems: "flex-start",
+  },
+
+  // Left time column
   timeColumn: {
-    alignItems: 'center',
-    width: 46,
+    width: 52,
+    alignItems: "flex-end",
+    paddingRight: 8,
+    paddingTop: 2,
   },
   timeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
   },
-  ampmText: {
+  timeTextEnd: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+
+  // Center line + dot
+  lineColumn: {
+    width: 20,
+    alignItems: "center",
+    paddingTop: 4,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginVertical: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    zIndex: 1,
   },
-  line: {
-    width: 1,
+  verticalLine: {
+    width: 2,
     flex: 1,
-    backgroundColor: Colors.border,
-    marginBottom: -8,
+    backgroundColor: COLORS.border,
+    marginTop: 4,
+    minHeight: 60,
   },
+
+  // Class card
   classCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
     padding: 14,
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    marginBottom: 12,
+    borderLeftWidth: 4,
+    marginLeft: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
   },
   className: {
     fontSize: 15,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-    marginBottom: 6,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+    flex: 1,
   },
-  classMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  courseCode: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  roomText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 3,
+  },
+  daysText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
-  classMetaText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  badgeOk: {
-    backgroundColor: Colors.successLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  badgeOkText: {
-    fontSize: 11,
-    color: Colors.success,
-    fontWeight: '500',
-  },
-  missedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.dangerLight,
-    paddingHorizontal: 8,
+
+  // Attendance badge
+  badge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+    borderRadius: 8,
   },
-  missedBadgeText: {
-    fontSize: 11,
-    color: Colors.danger,
-    fontWeight: '500',
+  badgeText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
-  badgeClass: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 60,
   },
-  badgeClassText: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: '500',
+  emptyText: {
+    fontSize: 15,
+    color: COLORS.textMuted,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 32,
+    right: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  fabText: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "300",
+    lineHeight: 32,
   },
 });

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,20 +7,17 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useClasses } from "../store/ClassContext";
-import COLORS from "../constants/colors";
 import AddClassModal from "../components/AddClassModal";
-import React, { useState } from "react";
+import COLORS from "../constants/colors";
+
 export default function ScheduleScreen() {
   const { classes, getAttendanceRate, getTodaysClasses } = useClasses();
-  const [modalVisible, setModalVisible] = useState(false); // ← add this line
+  const [modalVisible, setModalVisible] = useState(false);
 
   const todaysClasses = getTodaysClasses();
-
-  // Fallback: if nothing is scheduled today, show all classes instead
   const displayClasses = todaysClasses.length > 0 ? todaysClasses : classes;
   const isShowingAll = todaysClasses.length === 0;
 
-  // Get the current date formatted nicely for the header
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -29,8 +26,7 @@ export default function ScheduleScreen() {
 
   function getAttendanceBadge(cls) {
     const rate = getAttendanceRate(cls);
-    if (rate === null) return null; // no history yet, show nothing
-
+    if (rate === null) return null;
     if (rate >= 80) {
       return { label: `${rate}% attendance`, bg: COLORS.successLight, color: COLORS.success };
     } else if (rate >= 60) {
@@ -53,7 +49,6 @@ export default function ScheduleScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Schedule</Text>
           <Text style={styles.headerDate}>{today}</Text>
@@ -109,7 +104,6 @@ export default function ScheduleScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* ── Floating "+" Button ── */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => setModalVisible(true)}
@@ -134,8 +128,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 56,
   },
-
-  // Header
   header: {
     marginBottom: 20,
   },
@@ -149,8 +141,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
-
-  // No-class banner
   noClassBanner: {
     backgroundColor: COLORS.warningLight,
     borderRadius: 12,
@@ -162,15 +152,11 @@ const styles = StyleSheet.create({
     color: COLORS.warning,
     fontWeight: "500",
   },
-
-  // Timeline row (time + line + card)
   timelineRow: {
     flexDirection: "row",
     marginBottom: 20,
     alignItems: "flex-start",
   },
-
-  // Left time column
   timeColumn: {
     width: 52,
     alignItems: "flex-end",
@@ -187,8 +173,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     marginTop: 2,
   },
-
-  // Center line + dot
   lineColumn: {
     width: 20,
     alignItems: "center",
@@ -207,8 +191,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     minHeight: 60,
   },
-
-  // Class card
   classCard: {
     flex: 1,
     backgroundColor: COLORS.surface,
@@ -252,8 +234,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: 8,
   },
-
-  // Attendance badge
   badge: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
@@ -264,8 +244,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-
-  // Empty state
   emptyState: {
     alignItems: "center",
     paddingVertical: 60,

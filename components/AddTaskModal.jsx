@@ -37,23 +37,18 @@ export default function AddTaskModal({ visible, onClose }) {
   function toDatetimeLocalString(date) {
     const pad = (n) => String(n).padStart(2, "0");
     return (
-      date.getFullYear() +
-      "-" + pad(date.getMonth() + 1) +
-      "-" + pad(date.getDate()) +
-      "T" + pad(date.getHours()) +
-      ":" + pad(date.getMinutes())
+      date.getFullYear() + "-" +
+      pad(date.getMonth() + 1) + "-" +
+      pad(date.getDate()) + "T" +
+      pad(date.getHours()) + ":" +
+      pad(date.getMinutes())
     );
   }
 
   function formatDeadline(date) {
     return date.toLocaleString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
+      weekday: "short", month: "short", day: "numeric",
+      year: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
     });
   }
 
@@ -96,120 +91,64 @@ export default function AddTaskModal({ visible, onClose }) {
     onClose();
   }
 
-  // ── Web: render a plain div overlay instead of RN Modal ──
-  // RN's Modal on web can trap focus and block pointer events unpredictably.
-  // A plain absolutely-positioned div avoids all of that.
+  // ── WEB ──
   if (Platform.OS === "web") {
     if (!visible) return null;
-
     return (
       <div
-        onClick={(e) => {
-          // Clicking the dark backdrop (not the card) closes the modal
-          if (e.target === e.currentTarget) onClose();
-        }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         style={{
           position: "fixed",
-          inset: 0,
+          top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "center",
           zIndex: 9999,
+          overflowY: "auto",
+          padding: "20px 16px",
+          boxSizing: "border-box",
         }}
       >
         <div
+          onClick={(e) => e.stopPropagation()}
           style={{
             backgroundColor: COLORS.surface,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderRadius: 24,
             padding: 24,
             width: "100%",
-            maxWidth: 600,
-            maxHeight: "90vh",
-            overflowY: "auto",
+            maxWidth: 480,
+            margin: "0 auto",
             boxSizing: "border-box",
           }}
         >
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <span style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary }}>
-              New Task
-            </span>
-            <button
-              onClick={onClose}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: COLORS.border,
-                border: "none",
-                cursor: "pointer",
-                fontSize: 14,
-                color: COLORS.textSecondary,
-                fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ✕
-            </button>
+            <span style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary }}>New Task</span>
+            <button onClick={onClose} style={{
+              width: 32, height: 32, borderRadius: 16,
+              backgroundColor: COLORS.border, border: "none",
+              cursor: "pointer", fontSize: 14, color: COLORS.textSecondary, fontWeight: 600,
+            }}>✕</button>
           </div>
 
-          {/* Title */}
           <label style={webStyles.label}>TASK TITLE *</label>
-          <input
-            type="text"
-            placeholder="e.g. Study for midterm"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={webStyles.input}
-          />
+          <input type="text" placeholder="e.g. Study for midterm" value={title}
+            onChange={(e) => setTitle(e.target.value)} style={webStyles.input} />
 
-          {/* Course code */}
           <label style={webStyles.label}>COURSE CODE</label>
-          <input
-            type="text"
-            placeholder="e.g. CS101 (optional)"
-            value={courseCode}
-            onChange={(e) => setCourseCode(e.target.value.toUpperCase())}
-            style={webStyles.input}
-          />
+          <input type="text" placeholder="e.g. CS101 (optional)" value={courseCode}
+            onChange={(e) => setCourseCode(e.target.value.toUpperCase())} style={webStyles.input} />
 
-          {/* Estimated minutes */}
           <label style={webStyles.label}>ESTIMATED MINUTES</label>
-          <input
-            type="number"
-            placeholder="e.g. 45"
-            value={estimatedMinutes}
-            onChange={(e) => setEstimatedMinutes(e.target.value)}
-            min="1"
-            style={webStyles.input}
-          />
+          <input type="number" placeholder="e.g. 45" value={estimatedMinutes}
+            onChange={(e) => setEstimatedMinutes(e.target.value)} min="1" style={webStyles.input} />
 
-          {/* Deadline */}
           <label style={webStyles.label}>DEADLINE</label>
-          <input
-            type="datetime-local"
-            value={toDatetimeLocalString(deadline)}
-            onChange={handleWebDateChange}
-            min={toDatetimeLocalString(new Date())}
-            style={webStyles.input}
-          />
-          {/* Formatted deadline display — always visible below the picker */}
-          <div style={{
-            marginTop: 6,
-            marginBottom: 4,
-            fontSize: 13,
-            color: COLORS.primary,
-            fontWeight: 600,
-            paddingLeft: 2,
-          }}>
+          <input type="datetime-local" value={toDatetimeLocalString(deadline)}
+            onChange={handleWebDateChange} min={toDatetimeLocalString(new Date())}
+            style={webStyles.input} />
+          <div style={{ fontSize: 13, color: COLORS.primary, fontWeight: 600, marginTop: 6 }}>
             📅 {formatDeadline(deadline)}
           </div>
 
-          {/* Submit */}
           <button
             onClick={handleSubmit}
             disabled={!title.trim()}
@@ -235,14 +174,9 @@ export default function AddTaskModal({ visible, onClose }) {
     );
   }
 
-  // ── Native: original RN Modal (works correctly on iOS/Android) ──
+  // ── NATIVE ──
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -256,63 +190,39 @@ export default function AddTaskModal({ visible, onClose }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
               <Text style={styles.label}>Task Title *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Study for midterm"
-                placeholderTextColor={COLORS.textMuted}
-                value={title}
-                onChangeText={setTitle}
-              />
+              <TextInput style={styles.input} placeholder="e.g. Study for midterm"
+                placeholderTextColor={COLORS.textMuted} value={title} onChangeText={setTitle} />
 
               <Text style={styles.label}>Course Code</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. CS101 (optional)"
-                placeholderTextColor={COLORS.textMuted}
-                value={courseCode}
-                onChangeText={setCourseCode}
-                autoCapitalize="characters"
-              />
+              <TextInput style={styles.input} placeholder="e.g. CS101 (optional)"
+                placeholderTextColor={COLORS.textMuted} value={courseCode}
+                onChangeText={setCourseCode} autoCapitalize="characters" />
 
               <Text style={styles.label}>Estimated Minutes</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 45"
-                placeholderTextColor={COLORS.textMuted}
-                value={estimatedMinutes}
-                onChangeText={setEstimatedMinutes}
-                keyboardType="numeric"
-              />
+              <TextInput style={styles.input} placeholder="e.g. 45"
+                placeholderTextColor={COLORS.textMuted} value={estimatedMinutes}
+                onChangeText={setEstimatedMinutes} keyboardType="numeric" />
 
               <Text style={styles.label}>Deadline</Text>
-              <TouchableOpacity
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateButtonText}>
-                  📅 {formatDeadline(deadline)}
-                </Text>
+              <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.dateButtonText}>📅 {formatDeadline(deadline)}</Text>
               </TouchableOpacity>
-
               {(showDatePicker || showTimePicker) && DateTimePicker && (
-                <DateTimePicker
-                  value={deadline}
+                <DateTimePicker value={deadline}
                   mode={showDatePicker ? "date" : "time"}
-                  display="default"
-                  onChange={handleNativeDateChange}
-                  minimumDate={new Date()}
-                />
+                  display="default" onChange={handleNativeDateChange}
+                  minimumDate={new Date()} />
               )}
 
               <TouchableOpacity
                 style={[styles.submitBtn, !title.trim() && styles.submitBtnDisabled]}
-                onPress={handleSubmit}
-                disabled={!title.trim()}
-              >
+                onPress={handleSubmit} disabled={!title.trim()}>
                 <Text style={styles.submitBtnText}>Add Task</Text>
               </TouchableOpacity>
+
+              <View style={{ height: 24 }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -321,7 +231,6 @@ export default function AddTaskModal({ visible, onClose }) {
   );
 }
 
-// Inline styles for the web branch (plain JS objects, not StyleSheet)
 const webStyles = {
   label: {
     display: "block",
@@ -352,83 +261,46 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
-  avoidingView: {
-    width: "100%",
-  },
+  avoidingView: { width: "100%" },
   card: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
     maxHeight: "90%",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    padding: 24,
+    paddingBottom: 8,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-  },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.textPrimary },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: COLORS.border,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center", alignItems: "center",
   },
-  closeBtnText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontWeight: "600",
-  },
+  closeBtnText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: "600" },
   label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-    marginTop: 14,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 13, fontWeight: "600", color: COLORS.textSecondary,
+    marginBottom: 6, marginTop: 14,
+    textTransform: "uppercase", letterSpacing: 0.5,
   },
   input: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 14,
+    fontSize: 15, color: COLORS.textPrimary,
+    borderWidth: 1, borderColor: COLORS.border,
   },
   dateButton: {
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 14,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  dateButtonText: {
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
+  dateButtonText: { fontSize: 15, color: COLORS.textPrimary },
   submitBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 14,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 24,
-    marginBottom: 8,
+    backgroundColor: COLORS.primary, borderRadius: 14,
+    padding: 16, alignItems: "center", marginTop: 24,
   },
-  submitBtnDisabled: {
-    backgroundColor: COLORS.border,
-  },
-  submitBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  submitBtnDisabled: { backgroundColor: COLORS.border },
+  submitBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

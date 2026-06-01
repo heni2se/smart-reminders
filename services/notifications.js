@@ -1,124 +1,100 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+import { getAdaptiveOffset } from './behaviorEngine';
 
-const ClassContext = createContext();
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
-const SAMPLE_CLASSES = [
-  {
-    id: '1',
-    name: 'Calculus II',
-    courseCode: 'MATH201',
-    room: 'Room 204-A',
-    days: ['Mon', 'Wed'],
-    startTime: '8:00 AM',
-    endTime: '9:30 AM',
-    color: '#534AB7',
-    attendanceHistory: [true, true, true, true, true, true],
-  },
-  {
-    id: '2',
-    name: 'Intro to CS',
-    courseCode: 'CS101',
-    room: 'Lab 3, Eng Bldg',
-    days: ['Tue', 'Thu'],
-    startTime: '10:30 AM',
-    endTime: '12:00 PM',
-    color: '#A32D2D',
-    attendanceHistory: [true, false, true, false, true, false, true, false],
-  },
-  {
-    id: '3',
-    name: 'Technical Writing',
-    courseCode: 'ENG310',
-    room: 'Rm 101-B',
-    days: ['Tue', 'Fri'],
-    startTime: '2:00 PM',
-    endTime: '3:30 PM',
-    color: '#3B6D11',
-    attendanceHistory: [true, true, true, true, true],
-  },
-];
+export async function requestNotificationPermission() {
+  if (!Device.isDevice) return false;
 
-export function ClassProvider({ children }) {
-  const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
 
-  useEffect(() => {
-    loadClasses();
-  }, []);
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
 
-  const loadClasses = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('classes');
-      if (stored) {
-        setClasses(JSON.parse(stored));
-      } else {
-        setClasses(SAMPLE_CLASSES);
-        await AsyncStorage.setItem('classes', JSON.stringify(SAMPLE_CLASSES));
-      }
-    } catch (error) {
-      setClasses(SAMPLE_CLASSES);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (finalStatus !== 'granted') return false;
 
-  const saveClasses = async (updated) => {
-    try {
-      await AsyncStorage.setItem('classes', JSON.stringify(updated));
-      setClasses(updated);
-    } catch (error) {
-      console.error('Failed to save classes:', error);
-    }
-  };
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('reminders', {
+      name: 'Task Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#534AB7',
+    });
+  }
 
-  const addClass = async (newClass) => {
-    const entry = {
-      ...newClass,
-      id: Date.now().toString(),
-      attendanceHistory: [],
-    };
-    const updated = [...classes, entry];
-    await saveClasses(updated);
-  };
-
-  const markAttendance = async (id, attended) => {
-    const updated = classes.map((c) =>
-      c.id === id
-        ? { ...c, attendanceHistory: [...c.attendanceHistory, attended] }
-        : c
-    );
-    await saveClasses(updated);
-  };
-
-  const getAttendanceRate = (classItem) => {
-    if (!classItem.attendanceHistory.length) return 100;
-    const attended = classItem.attendanceHistory.filter(Boolean).length;
-    return Math.round((attended / classItem.attendanceHistory.length) * 100);
-  };
-
-  // Uses short day names to match what AddClassModal saves: "Mon", "Tue", etc.
-  const getTodaysClasses = () => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'short' });
-    return classes.filter((c) => c.days.includes(today));
-  };
-
-  return (
-    <ClassContext.Provider
-      value={{
-        classes,
-        loading,
-        addClass,
-        markAttendance,
-        getAttendanceRate,
-        getTodaysClasses,
-      }}
-    >
-      {children}
-    </ClassContext.Provider>
-  );
+  return true;
 }
 
-export function useClasses() {
-  return useContext(ClassContext);
+export async function scheduleTaskReminders(task) {
+  if (!Device.isDevice) return [];
+
+  const deadline = new Date(task.deadline);
+  const now = new Date();
+
+  // Get extra buffer hours based on user's past behavior
+  const adaptiveOffset = await getAdaptiveOffset();
+
+  const scheduledIds = [];
+
+  const times = [
+    {
+      // Base 24hr warning + adaptive offset
+      triggerDate: new Date(
+        deadline.getTime() - (24 + adaptiveOffset) * 60 * 60 * 1000
+      ),
+      label: adaptiveOffset > 0
+        ? `${24 + adaptiveOffset} hours (adjusted for your habits)`
+        : '24 hours',
+    },
+    {
+      // Base 1hr warning + adaptive offset
+      triggerDate: new Date(
+        deadline.getTime() - (1 + adaptiveOffset) * 60 * 60 * 1000
+      ),
+      label: adaptiveOffset > 0
+        ? `${1 + adaptiveOffset} hours (adjusted for your habits)`
+        : '1 hour',
+    },
+  ];
+
+  for (const { triggerDate, label } of times) {
+    if (triggerDate > now) {
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `⏰ Due in ${label}: ${task.title}`,
+          body: `${task.courseCode} — don't forget to submit!`,
+          data: { taskId: task.id },
+          sound: true,
+        },
+        trigger: {
+          date: triggerDate,
+          channelId: 'reminders',
+        },
+      });
+      scheduledIds.push(id);
+    }
+  }
+
+  return scheduledIds;
+}
+
+export async function cancelTaskReminders(notificationIds = []) {
+  for (const id of notificationIds) {
+    await Notifications.cancelScheduledNotificationAsync(id);
+  }
+}
+
+export async function cancelAllReminders() {
+  await Notifications.cancelAllScheduledNotificationsAsync();
 }

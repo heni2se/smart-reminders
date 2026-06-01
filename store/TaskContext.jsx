@@ -1,52 +1,49 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// 1. Create the context
+import {
+  scheduleTaskReminders,
+  cancelTaskReminders,
+} from '../services/notifications';
+import { logTaskCompletion } from '../services/behaviorEngine';
 const TaskContext = createContext();
 
-// 2. Sample data so the app isn't empty on first load
 const SAMPLE_TASKS = [
   {
     id: '1',
-    title: 'Math Problem Set 4',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString(),
-    estimatedMinutes: 45,
-    progress: 60,
-    collaborators: [
-      { initials: 'JM', color: 'primary' },
-      { initials: 'KS', color: 'success' },
-    ],
+    title: 'Calculus Problem Set 4',
+    courseCode: 'MATH201',
+    estimatedMinutes: 90,
+    deadline: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    progress: 40,
     completed: false,
-    courseCode: 'MATH 201',
+    notificationIds: [],
   },
   {
     id: '2',
-    title: 'CS101 Lab Report',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 72).toISOString(),
-    estimatedMinutes: 120,
-    progress: 20,
-    collaborators: [],
+    title: 'CS Lab Report',
+    courseCode: 'CS101',
+    estimatedMinutes: 60,
+    deadline: new Date(Date.now() + 26 * 60 * 60 * 1000).toISOString(),
+    progress: 10,
     completed: false,
-    courseCode: 'CS 101',
+    notificationIds: [],
   },
   {
     id: '3',
-    title: 'Technical Writing Essay',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
-    estimatedMinutes: 90,
-    progress: 0,
-    collaborators: [],
+    title: 'Technical Writing Draft',
+    courseCode: 'ENG310',
+    estimatedMinutes: 45,
+    deadline: new Date(Date.now() + 50 * 60 * 60 * 1000).toISOString(),
+    progress: 75,
     completed: false,
-    courseCode: 'ENG 310',
+    notificationIds: [],
   },
 ];
 
-// 3. The Provider — wraps the app and gives all screens access to the data
 export function TaskProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load tasks from device storage when app starts
   useEffect(() => {
     loadTasks();
   }, []);
@@ -57,41 +54,38 @@ export function TaskProvider({ children }) {
       if (stored) {
         setTasks(JSON.parse(stored));
       } else {
-        // First time opening — load sample data
         setTasks(SAMPLE_TASKS);
         await AsyncStorage.setItem('tasks', JSON.stringify(SAMPLE_TASKS));
       }
     } catch (error) {
-      console.error('Failed to load tasks:', error);
       setTasks(SAMPLE_TASKS);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveTasks = async (updatedTasks) => {
+  const saveTasks = async (updated) => {
     try {
-      await AsyncStorage.setItem('tasks', JSON.stringify(updatedTasks));
-      setTasks(updatedTasks);
+      await AsyncStorage.setItem('tasks', JSON.stringify(updated));
+      setTasks(updated);
     } catch (error) {
       console.error('Failed to save tasks:', error);
     }
   };
 
-  // Add a new task
-  const addTask = async (task) => {
-    const newTask = {
-      ...task,
+  const addTask = async (newTask) => {
+    // Schedule reminders and store the notification IDs with the task
+    const notificationIds = await scheduleTaskReminders(newTask);
+    const entry = {
+      ...newTask,
       id: Date.now().toString(),
       progress: 0,
       completed: false,
-      collaborators: [],
+      notificationIds,
     };
-    const updated = [...tasks, newTask];
-    await saveTasks(updated);
+    await saveTasks([...tasks, entry]);
   };
 
-  // Update progress on a task
   const updateProgress = async (id, progress) => {
     const updated = tasks.map((t) =>
       t.id === id ? { ...t, progress } : t
@@ -99,34 +93,42 @@ export function TaskProvider({ children }) {
     await saveTasks(updated);
   };
 
-  // Mark a task complete
   const completeTask = async (id) => {
-    const updated = tasks.map((t) =>
-      t.id === id ? { ...t, completed: true, progress: 100 } : t
-    );
-    await saveTasks(updated);
+  const task = tasks.find((t) => t.id === id);
+  if (task) {
+    await cancelTaskReminders(task.notificationIds);
+    await logTaskCompletion(task); // log behavior for adaptive engine
+  }
+  const updated = tasks.map((t) =>
+    t.id === id ? { ...t, completed: true, progress: 100 } : t
+  );
+  await saveTasks(updated);
   };
 
-  // Delete a task
   const deleteTask = async (id) => {
-    const updated = tasks.filter((t) => t.id !== id);
-    await saveTasks(updated);
+    const task = tasks.find((t) => t.id === id);
+    if (task) await cancelTaskReminders(task.notificationIds);
+    await saveTasks(tasks.filter((t) => t.id !== id));
   };
 
-  // How urgent is this task? Returns 'urgent', 'soon', or 'ok'
   const getUrgency = (deadline) => {
-    const hoursLeft = (new Date(deadline) - new Date()) / (1000 * 60 * 60);
-    if (hoursLeft < 24) return 'urgent';
-    if (hoursLeft < 72) return 'soon';
-    return 'ok';
+    const hours = (new Date(deadline) - new Date()) / (1000 * 60 * 60);
+    if (hours < 6) return 'high';
+    if (hours < 24) return 'medium';
+    return 'low';
   };
 
-  // How much time is left as readable text
   const getTimeLeft = (deadline) => {
-    const hoursLeft = (new Date(deadline) - new Date()) / (1000 * 60 * 60);
-    if (hoursLeft < 1) return 'Due soon';
-    if (hoursLeft < 24) return `${Math.round(hoursLeft)}h left`;
-    return `${Math.round(hoursLeft / 24)}d left`;
+    const diff = new Date(deadline) - new Date();
+    if (diff <= 0) return 'Overdue';
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}d left`;
+    }
+    if (hours > 0) return `${hours}h ${minutes}m left`;
+    return `${minutes}m left`;
   };
 
   return (
@@ -147,7 +149,6 @@ export function TaskProvider({ children }) {
   );
 }
 
-// 4. Custom hook — any screen calls useTasks() to get everything above
 export function useTasks() {
   return useContext(TaskContext);
 }

@@ -5,6 +5,13 @@ import {
   cancelTaskReminders,
 } from '../services/notifications';
 import { logTaskCompletion } from '../services/behaviorEngine';
+import {
+  shareTask,
+  joinSharedTask,
+  saveJoinedTask,
+  getJoinedTasks,
+} from '../services/collaborationService';
+
 const TaskContext = createContext();
 
 const SAMPLE_TASKS = [
@@ -51,8 +58,17 @@ export function TaskProvider({ children }) {
   const loadTasks = async () => {
     try {
       const stored = await AsyncStorage.getItem('tasks');
+      const joined = await getJoinedTasks();
       if (stored) {
-        setTasks(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        // Merge owned tasks with joined shared tasks, avoid duplicates
+        const merged = [
+          ...parsed,
+          ...joined.filter(
+            (j) => !parsed.find((t) => t.shareCode === j.shareCode)
+          ),
+        ];
+        setTasks(merged);
       } else {
         setTasks(SAMPLE_TASKS);
         await AsyncStorage.setItem('tasks', JSON.stringify(SAMPLE_TASKS));
@@ -74,7 +90,6 @@ export function TaskProvider({ children }) {
   };
 
   const addTask = async (newTask) => {
-    // Schedule reminders and store the notification IDs with the task
     const notificationIds = await scheduleTaskReminders(newTask);
     const entry = {
       ...newTask,
@@ -82,6 +97,8 @@ export function TaskProvider({ children }) {
       progress: 0,
       completed: false,
       notificationIds,
+      shareCode: null,
+      isShared: false,
     };
     await saveTasks([...tasks, entry]);
   };
@@ -94,21 +111,52 @@ export function TaskProvider({ children }) {
   };
 
   const completeTask = async (id) => {
-  const task = tasks.find((t) => t.id === id);
-  if (task) {
-    await cancelTaskReminders(task.notificationIds);
-    await logTaskCompletion(task); // log behavior for adaptive engine
-  }
-  const updated = tasks.map((t) =>
-    t.id === id ? { ...t, completed: true, progress: 100 } : t
-  );
-  await saveTasks(updated);
+    const task = tasks.find((t) => t.id === id);
+    if (task) {
+      await cancelTaskReminders(task.notificationIds);
+      await logTaskCompletion(task);
+    }
+    const updated = tasks.map((t) =>
+      t.id === id ? { ...t, completed: true, progress: 100 } : t
+    );
+    await saveTasks(updated);
   };
 
   const deleteTask = async (id) => {
     const task = tasks.find((t) => t.id === id);
     if (task) await cancelTaskReminders(task.notificationIds);
     await saveTasks(tasks.filter((t) => t.id !== id));
+  };
+
+  // Share a task and return the generated code
+  const shareTaskById = async (id) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return null;
+    const code = await shareTask(task);
+    // Mark task as shared in local state
+    const updated = tasks.map((t) =>
+      t.id === id ? { ...t, isShared: true, shareCode: code } : t
+    );
+    await saveTasks(updated);
+    return code;
+  };
+
+  // Join a task by share code
+  const joinTaskByCode = async (code) => {
+    const result = await joinSharedTask(code);
+    if (!result.success) return result;
+    const saveResult = await saveJoinedTask(result.task);
+    if (!saveResult.success) return saveResult;
+    // Add to current task list
+    const newTask = {
+      ...result.task,
+      id: Date.now().toString(),
+      progress: 0,
+      completed: false,
+      notificationIds: [],
+    };
+    await saveTasks([...tasks, newTask]);
+    return { success: true };
   };
 
   const getUrgency = (deadline) => {
@@ -140,6 +188,8 @@ export function TaskProvider({ children }) {
         updateProgress,
         completeTask,
         deleteTask,
+        shareTaskById,
+        joinTaskByCode,
         getUrgency,
         getTimeLeft,
       }}

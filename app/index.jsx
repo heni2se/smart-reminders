@@ -6,20 +6,39 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
+  Platform,
 } from "react-native";
 import { useTasks } from "../store/TaskContext";
 import { useClasses } from "../store/ClassContext";
 import { getSuggestionMessage } from "../services/suggestionEngine";
+import { getWeather } from "../services/weatherService";
 import AddTaskModal from "../components/AddTaskModal";
 import COLORS from "../constants/colors";
 
 export default function HomeScreen() {
-  const { tasks, getUrgency, getTimeLeft, loading } = useTasks();
+  const { tasks, getUrgency, getTimeLeft, loading, shareTaskById, joinTaskByCode } = useTasks();
   const { getTodaysClasses } = useClasses();
   const todaysClasses = getTodaysClasses();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
+  const [weather, setWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinMessage, setJoinMessage] = useState("");
+  const [shareMessage, setShareMessage] = useState("");
+  const [showCollab, setShowCollab] = useState(false);
+
+  useEffect(() => {
+    async function loadWeather() {
+      setWeatherLoading(true);
+      const w = await getWeather();
+      setWeather(w);
+      setWeatherLoading(false);
+    }
+    loadWeather();
+  }, []);
 
   useEffect(() => {
     async function loadSuggestion() {
@@ -28,6 +47,63 @@ export default function HomeScreen() {
     }
     if (!loading) loadSuggestion();
   }, [tasks, loading]);
+
+  async function handleShare(taskId) {
+    const code = await shareTaskById(taskId);
+    if (code) {
+      setShareMessage(`Share code: ${code}`);
+      setShowCollab(true);
+    }
+  }
+
+  async function handleJoin() {
+    if (!joinCode.trim()) return;
+    const result = await joinTaskByCode(joinCode.trim());
+    if (result.success) {
+      setJoinMessage("✅ Task joined successfully!");
+      setJoinCode("");
+    } else {
+      setJoinMessage(`❌ ${result.message}`);
+    }
+  }
+
+  // Build the weather strip text
+  function renderWeatherStrip() {
+    if (weatherLoading) {
+      return (
+        <View style={styles.weatherStrip}>
+          <Text style={styles.weatherText}>Loading weather...</Text>
+        </View>
+      );
+    }
+
+    if (!weather || !weather.isReal) {
+      return (
+        <View style={styles.weatherStrip}>
+          <Text style={styles.weatherText}>
+            🌤 Weather unavailable — enable location for updates
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.weatherStrip}>
+        <View style={styles.weatherRow}>
+          <Text style={styles.weatherMain}>
+            {weather.emoji} {weather.temp}°C — {weather.description}
+          </Text>
+          <Text style={styles.weatherCity}>{weather.cityName}</Text>
+        </View>
+        {weather.warning && (
+          <Text style={styles.weatherWarning}>⚠️ {weather.warning}</Text>
+        )}
+        <Text style={styles.weatherDetail}>
+          Feels like {weather.feelsLike}°C · {weather.humidity}% humidity · {weather.windSpeed} km/h wind
+        </Text>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -61,12 +137,8 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── Weather strip ── */}
-        <View style={styles.weatherStrip}>
-          <Text style={styles.weatherText}>
-            🌧 Rain expected at 3PM — move outdoor tasks earlier
-          </Text>
-        </View>
+        {/* ── Real Weather Strip ── */}
+        {renderWeatherStrip()}
 
         {/* ── Smart AI Suggestion Card ── */}
         {suggestion && (
@@ -100,6 +172,64 @@ export default function HomeScreen() {
               </View>
             ))}
           </>
+        )}
+
+        {/* ── Collaboration panel ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Collaboration</Text>
+          <TouchableOpacity onPress={() => setShowCollab((p) => !p)}>
+            <Text style={styles.seeAll}>{showCollab ? "Hide" : "Show"}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {showCollab && (
+          <View style={styles.collabCard}>
+            <Text style={styles.collabSubtitle}>Join a shared task</Text>
+            {Platform.OS === "web" ? (
+              <input
+                type="text"
+                placeholder="Enter 6-character code"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                style={{
+                  width: "100%",
+                  padding: 12,
+                  borderRadius: 10,
+                  border: `1px solid ${COLORS.border}`,
+                  fontSize: 15,
+                  backgroundColor: COLORS.background,
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                  letterSpacing: 3,
+                  marginBottom: 8,
+                  outline: "none",
+                }}
+              />
+            ) : (
+              <TextInput
+                style={styles.codeInput}
+                placeholder="Enter 6-character code"
+                placeholderTextColor={COLORS.textMuted}
+                value={joinCode}
+                onChangeText={(t) => setJoinCode(t.toUpperCase())}
+                maxLength={6}
+                autoCapitalize="characters"
+              />
+            )}
+            <TouchableOpacity style={styles.joinBtn} onPress={handleJoin}>
+              <Text style={styles.joinBtnText}>Join Task</Text>
+            </TouchableOpacity>
+            {joinMessage ? (
+              <Text style={styles.joinMessage}>{joinMessage}</Text>
+            ) : null}
+            {shareMessage ? (
+              <View style={styles.shareCodeBox}>
+                <Text style={styles.shareCodeText}>{shareMessage}</Text>
+                <Text style={styles.shareCodeHint}>Share this code with a classmate</Text>
+              </View>
+            ) : null}
+          </View>
         )}
 
         {/* ── Tasks ── */}
@@ -139,11 +269,8 @@ export default function HomeScreen() {
                 </View>
                 <Text style={styles.taskMeta}>
                   {task.courseCode} · Due {new Date(task.deadline).toLocaleString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
+                    month: "short", day: "numeric",
+                    hour: "numeric", minute: "2-digit", hour12: true,
                   })} · {timeLeft}
                 </Text>
                 <View style={styles.progressBarBg}>
@@ -153,6 +280,29 @@ export default function HomeScreen() {
                   }]} />
                 </View>
                 <Text style={styles.progressLabel}>{task.progress || 0}% complete</Text>
+
+                {!task.shareCode && (
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => handleShare(task.id)}
+                  >
+                    <Text style={styles.shareBtnText}>🔗 Share</Text>
+                  </TouchableOpacity>
+                )}
+                {task.isShared && task.shareCode && (
+                  <View style={styles.sharedBadge}>
+                    <Text style={styles.sharedBadgeText}>
+                      🔗 Shared · Code: {task.shareCode}
+                    </Text>
+                  </View>
+                )}
+                {task.shareCode && !task.isShared && (
+                  <View style={[styles.sharedBadge, { backgroundColor: COLORS.successLight }]}>
+                    <Text style={[styles.sharedBadgeText, { color: COLORS.success }]}>
+                      👥 Joined task
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })
@@ -197,7 +347,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight,
     borderRadius: 12, padding: 12, marginBottom: 16,
   },
-  weatherText: { fontSize: 13, color: COLORS.primaryDark, fontWeight: "500" },
+  weatherRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 4,
+  },
+  weatherMain: {
+    fontSize: 14, fontWeight: "600", color: COLORS.primaryDark,
+  },
+  weatherCity: {
+    fontSize: 12, color: COLORS.primary, fontWeight: "500",
+  },
+  weatherWarning: {
+    fontSize: 13, color: COLORS.warning,
+    fontWeight: "500", marginBottom: 4,
+  },
+  weatherDetail: {
+    fontSize: 11, color: COLORS.textSecondary,
+  },
+  weatherText: {
+    fontSize: 13, color: COLORS.primaryDark, fontWeight: "500",
+  },
   aiCard: {
     backgroundColor: COLORS.primary,
     borderRadius: 16, padding: 18, marginBottom: 24,
@@ -224,6 +393,41 @@ const styles = StyleSheet.create({
   },
   classTitle: { fontSize: 15, fontWeight: "600", color: COLORS.textPrimary, marginBottom: 3 },
   classMeta: { fontSize: 13, color: COLORS.textSecondary },
+  collabCard: {
+    backgroundColor: COLORS.surface, borderRadius: 16,
+    padding: 16, marginBottom: 20,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  collabSubtitle: {
+    fontSize: 13, fontWeight: "600",
+    color: COLORS.textSecondary, marginBottom: 10,
+  },
+  codeInput: {
+    backgroundColor: COLORS.background, borderRadius: 10,
+    padding: 12, fontSize: 15, color: COLORS.textPrimary,
+    borderWidth: 1, borderColor: COLORS.border,
+    letterSpacing: 3, marginBottom: 8,
+  },
+  joinBtn: {
+    backgroundColor: COLORS.primary, borderRadius: 10,
+    padding: 12, alignItems: "center",
+  },
+  joinBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  joinMessage: {
+    marginTop: 8, fontSize: 13,
+    color: COLORS.textSecondary, textAlign: "center",
+  },
+  shareCodeBox: {
+    marginTop: 12, backgroundColor: COLORS.primaryLight,
+    borderRadius: 10, padding: 12, alignItems: "center",
+  },
+  shareCodeText: {
+    fontSize: 18, fontWeight: "700",
+    color: COLORS.primary, letterSpacing: 3,
+  },
+  shareCodeHint: {
+    fontSize: 12, color: COLORS.textSecondary, marginTop: 4,
+  },
   taskCard: {
     backgroundColor: COLORS.surface, borderRadius: 16,
     padding: 16, marginBottom: 12,
@@ -247,6 +451,18 @@ const styles = StyleSheet.create({
   },
   progressBarFill: { height: 6, borderRadius: 3 },
   progressLabel: { fontSize: 11, color: COLORS.textMuted, marginTop: 4 },
+  shareBtn: {
+    marginTop: 10, alignSelf: "flex-start",
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1, borderColor: COLORS.border,
+  },
+  shareBtnText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: "600" },
+  sharedBadge: {
+    marginTop: 8, alignSelf: "flex-start",
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+  },
+  sharedBadgeText: { fontSize: 12, color: COLORS.primary, fontWeight: "600" },
   emptyState: { alignItems: "center", paddingVertical: 40 },
   emptyText: { fontSize: 15, color: COLORS.textMuted },
   fab: {

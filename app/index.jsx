@@ -15,6 +15,7 @@ import { getSuggestionMessage } from "../services/suggestionEngine";
 import { getWeather } from "../services/weatherService";
 import AddTaskModal from "../components/AddTaskModal";
 import COLORS from "../constants/colors";
+import { addTaskToCalendar } from "../services/calendarService";
 
 export default function HomeScreen() {
   const { tasks, getUrgency, getTimeLeft, loading, shareTaskById, joinTaskByCode } = useTasks();
@@ -67,6 +68,14 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleAddToCalendar(task) {
+  const result = await addTaskToCalendar(task);
+  if (result.success) {
+    alert("✅ Added to your calendar!");
+  } else {
+    alert(`❌ ${result.message}`);
+  }
+}
   // Build the weather strip text
   function renderWeatherStrip() {
     if (weatherLoading) {
@@ -93,7 +102,7 @@ export default function HomeScreen() {
           <Text style={styles.weatherMain}>
             {weather.emoji} {weather.temp}°C — {weather.description}
           </Text>
-          <Text style={styles.weatherCity}>{weather.cityName}</Text>
+          <Text style={styles.weatherCity}>📍 {weather.cityName}</Text>
         </View>
         {weather.warning && (
           <Text style={styles.weatherWarning}>⚠️ {weather.warning}</Text>
@@ -289,6 +298,12 @@ export default function HomeScreen() {
                     <Text style={styles.shareBtnText}>🔗 Share</Text>
                   </TouchableOpacity>
                 )}
+                <TouchableOpacity
+                  style={styles.shareBtn}
+                  onPress={() => handleAddToCalendar(task)}
+                >
+                  <Text style={styles.shareBtnText}>📅 Add to Calendar</Text>
+                </TouchableOpacity>
                 {task.isShared && task.shareCode && (
                   <View style={styles.sharedBadge}>
                     <Text style={styles.sharedBadgeText}>

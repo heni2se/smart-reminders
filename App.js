@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { TaskProvider } from './store/TaskContext';
 import { ClassProvider } from './store/ClassContext';
+import { UserProvider } from './store/UserContext';
 import { requestNotificationPermission } from './services/notifications';
 import {
   useFonts,
@@ -35,12 +36,14 @@ export default function App() {
   }
 
   return (
-    <TaskProvider>
-      <ClassProvider>
-        <NavigationContainer>
-          <AppNavigator />
-        </NavigationContainer>
-      </ClassProvider>
-    </TaskProvider>
+    <UserProvider>
+      <TaskProvider>
+        <ClassProvider>
+          <NavigationContainer>
+            <AppNavigator />
+          </NavigationContainer>
+        </ClassProvider>
+      </TaskProvider>
+    </UserProvider>
   );
 }

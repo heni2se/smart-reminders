@@ -1,37 +1,36 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
 import HomeScreen from './app/index';
 import ScheduleScreen from './app/schedule';
 import FocusScreen from './app/focus';
 import InsightsScreen from './app/insights';
-import Colors from './constants/colors';
+import COLORS, { FONTS } from './constants/colors';
 
 const Tab = createBottomTabNavigator();
 
-export default function Navigation() {
+export default function AppNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          borderTopWidth: 0.5,
-          paddingBottom: 8,
-          paddingTop: 6,
-          height: 60,
-        },
+        tabBarShowLabel: true,
+        tabBarStyle: styles.tabBar,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textMuted,
         tabBarIcon: ({ focused, color, size }) => {
           const icons = {
-            Home: focused ? 'home' : 'home-outline',
+            Home:     focused ? 'home' : 'home-outline',
             Schedule: focused ? 'calendar' : 'calendar-outline',
-            Focus: focused ? 'play-circle' : 'play-circle-outline',
+            Focus:    focused ? 'timer' : 'timer-outline',
             Insights: focused ? 'bar-chart' : 'bar-chart-outline',
           };
-          return <Ionicons name={icons[route.name]} size={22} color={color} />;
+          return (
+            <View style={[styles.iconWrapper, focused && styles.iconWrapperActive]}>
+              <Ionicons name={icons[route.name]} size={20} color={color} />
+            </View>
+          );
         },
       })}
     >
@@ -42,3 +41,34 @@ export default function Navigation() {
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: COLORS.surface,
+    borderTopColor: COLORS.border,
+    borderTopWidth: 1,
+    height: Platform.OS === 'ios' ? 88 : 64,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+    paddingTop: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+  tabLabel: {
+    fontFamily: FONTS.medium,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  iconWrapper: {
+    width: 40,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconWrapperActive: {
+    backgroundColor: COLORS.primaryLight,
+  },
+});

@@ -43,9 +43,7 @@ export function ClassProvider({ children }) {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadClasses();
-  }, []);
+  useEffect(() => { loadClasses(); }, []);
 
   const loadClasses = async () => {
     try {
@@ -73,20 +71,22 @@ export function ClassProvider({ children }) {
   };
 
   const addClass = async (newClass) => {
-    const entry = {
-      ...newClass,
-      id: Date.now().toString(),
-      attendanceHistory: [],
-    };
-    const updated = [...classes, entry];
+    const entry = { ...newClass, id: Date.now().toString(), attendanceHistory: [] };
+    await saveClasses([...classes, entry]);
+  };
+
+  const updateClass = async (id, updates) => {
+    const updated = classes.map((c) => c.id === id ? { ...c, ...updates } : c);
     await saveClasses(updated);
+  };
+
+  const deleteClass = async (id) => {
+    await saveClasses(classes.filter((c) => c.id !== id));
   };
 
   const markAttendance = async (id, attended) => {
     const updated = classes.map((c) =>
-      c.id === id
-        ? { ...c, attendanceHistory: [...c.attendanceHistory, attended] }
-        : c
+      c.id === id ? { ...c, attendanceHistory: [...c.attendanceHistory, attended] } : c
     );
     await saveClasses(updated);
   };
@@ -97,23 +97,16 @@ export function ClassProvider({ children }) {
     return Math.round((attended / classItem.attendanceHistory.length) * 100);
   };
 
-  // Uses short day names to match what AddClassModal saves: "Mon", "Tue", etc.
   const getTodaysClasses = () => {
     const today = new Date().toLocaleDateString('en-US', { weekday: 'short' });
     return classes.filter((c) => c.days.includes(today));
   };
 
   return (
-    <ClassContext.Provider
-      value={{
-        classes,
-        loading,
-        addClass,
-        markAttendance,
-        getAttendanceRate,
-        getTodaysClasses,
-      }}
-    >
+    <ClassContext.Provider value={{
+      classes, loading, addClass, updateClass, deleteClass,
+      markAttendance, getAttendanceRate, getTodaysClasses,
+    }}>
       {children}
     </ClassContext.Provider>
   );

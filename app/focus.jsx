@@ -15,7 +15,7 @@ const LONG_BREAK_MINUTES = 15;
 const SESSIONS_BEFORE_LONG_BREAK = 4;
 
 export default function FocusScreen() {
-  const { tasks, updateProgress } = useTasks();
+  const { tasks, updateProgress, completeTask } = useTasks();
   const incompleteTasks = tasks.filter((t) => !t.completed);
 
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -232,15 +232,27 @@ export default function FocusScreen() {
         </View>
 
         {/* ── Selected task ── */}
-        <TouchableOpacity
-          style={styles.taskSelector}
-          onPress={() => setShowTaskPicker((prev) => !prev)}
-        >
-          <Text style={styles.taskSelectorLabel}>FOCUSING ON</Text>
-          <Text style={styles.taskSelectorValue} numberOfLines={1}>
-            {selectedTask ? selectedTask.title : "Tap to select a task"}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.taskSelectorRow}>
+          <TouchableOpacity
+            style={[styles.taskSelector, { flex: 1 }]}
+            onPress={() => setShowTaskPicker((prev) => !prev)}
+          >
+            <Text style={styles.taskSelectorLabel}>FOCUSING ON</Text>
+            <Text style={styles.taskSelectorValue} numberOfLines={1}>
+              {selectedTask ? selectedTask.title : "Tap to select a task"}
+            </Text>
+          </TouchableOpacity>
+          {selectedTask && (
+            <TouchableOpacity
+              style={styles.completeTaskBtn}
+              onPress={() => { completeTask(selectedTaskId); setSelectedTaskId(null); }}
+            >
+              <Text style={styles.completeTaskBtnText}>✓ Done</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        
 
         {/* ── Task picker dropdown ── */}
         {showTaskPicker && (
@@ -431,4 +443,7 @@ const styles = StyleSheet.create({
     fontSize: 12, color: COLORS.primaryDark,
     lineHeight: 18, fontWeight: "500",
   },
+  taskSelectorRow: { flexDirection: "row", alignSelf: "stretch", gap: 8, marginBottom: 8 },
+  completeTaskBtn: { backgroundColor: COLORS.success, borderRadius: 14, paddingHorizontal: 16, justifyContent: "center", alignItems: "center" },
+  completeTaskBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 });

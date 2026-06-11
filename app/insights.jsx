@@ -21,7 +21,7 @@ export default function InsightsScreen() {
   const [adaptiveOffset, setAdaptiveOffset] = useState(0);
   const [activeTab, setActiveTab] = useState("overview");
 
-  const { tasks, getUrgency } = useTasks();
+  const { tasks, getUrgency, toggleComplete } = useTasks();
   const { classes, getAttendanceRate } = useClasses();
 
   useEffect(() => {
@@ -273,18 +273,18 @@ export default function InsightsScreen() {
                 urgency === "medium" ? COLORS.warning :
                 COLORS.success;
               return (
-                <View key={task.id} style={[
-                  styles.taskRow,
-                  task.completed && { opacity: 0.5 },
-                ]}>
-                  <View style={[styles.taskDot, { backgroundColor: urgencyColor }]} />
+                <View key={task.id} style={[styles.taskRow, task.completed && { opacity: 0.5 }]}>
+                  <TouchableOpacity
+                    onPress={() => toggleComplete(task.id)}
+                    style={[styles.completeCircle, task.completed && styles.completeCircleDone]}
+                  >
+                    {task.completed && <Text style={styles.completeCheck}>✓</Text>}
+                  </TouchableOpacity>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.taskRowTitle} numberOfLines={1}>
-                      {task.completed ? "✅ " : ""}{task.title}
+                    <Text style={[styles.taskRowTitle, task.completed && { textDecorationLine: "line-through", color: COLORS.textMuted }]} numberOfLines={1}>
+                      {task.title}
                     </Text>
-                    <Text style={styles.taskRowMeta}>
-                      {task.courseCode} · {task.progress}% done
-                    </Text>
+                    <Text style={styles.taskRowMeta}>{task.courseCode} · {task.progress}% done</Text>
                   </View>
                 </View>
               );
@@ -468,4 +468,7 @@ const styles = StyleSheet.create({
   attendanceDetail: {
     fontSize: 12, color: COLORS.textSecondary, marginTop: 4,
   },
+  completeCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border, justifyContent: "center", alignItems: "center", marginRight: 10 },
+  completeCircleDone: { backgroundColor: COLORS.success, borderColor: COLORS.success },
+  completeCheck: { color: "#fff", fontSize: 12, fontWeight: "700" },
 });

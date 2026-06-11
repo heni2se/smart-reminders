@@ -1,16 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  scheduleTaskReminders,
-  cancelTaskReminders,
-} from '../services/notifications';
+import { scheduleTaskReminders, cancelTaskReminders } from '../services/notifications';
 import { logTaskCompletion } from '../services/behaviorEngine';
-import {
-  shareTask,
-  joinSharedTask,
-  saveJoinedTask,
-  getJoinedTasks,
-} from '../services/collaborationService';
+import { shareTask, joinSharedTask, saveJoinedTask, getJoinedTasks } from '../services/collaborationService';
 
 const TaskContext = createContext();
 
@@ -51,9 +43,7 @@ export function TaskProvider({ children }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadTasks();
-  }, []);
+  useEffect(() => { loadTasks(); }, []);
 
   const loadTasks = async () => {
     try {
@@ -61,12 +51,9 @@ export function TaskProvider({ children }) {
       const joined = await getJoinedTasks();
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Merge owned tasks with joined shared tasks, avoid duplicates
         const merged = [
           ...parsed,
-          ...joined.filter(
-            (j) => !parsed.find((t) => t.shareCode === j.shareCode)
-          ),
+          ...joined.filter((j) => !parsed.find((t) => t.shareCode === j.shareCode)),
         ];
         setTasks(merged);
       } else {
@@ -103,9 +90,33 @@ export function TaskProvider({ children }) {
     await saveTasks([...tasks, entry]);
   };
 
+  const updateTask = async (id, updates) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    // Reschedule notifications if deadline changed
+    if (updates.deadline && updates.deadline !== task.deadline) {
+      await cancelTaskReminders(task.notificationIds);
+      const newIds = await scheduleTaskReminders({ ...task, ...updates });
+      updates.notificationIds = newIds;
+    }
+    const updated = tasks.map((t) => t.id === id ? { ...t, ...updates } : t);
+    await saveTasks(updated);
+  };
+
   const updateProgress = async (id, progress) => {
+    const updated = tasks.map((t) => t.id === id ? { ...t, progress } : t);
+    await saveTasks(updated);
+  };
+
+  const toggleComplete = async (id) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    if (!task.completed) {
+      await cancelTaskReminders(task.notificationIds);
+      await logTaskCompletion(task);
+    }
     const updated = tasks.map((t) =>
-      t.id === id ? { ...t, progress } : t
+      t.id === id ? { ...t, completed: !t.completed, progress: !t.completed ? 100 : t.progress } : t
     );
     await saveTasks(updated);
   };
@@ -116,9 +127,7 @@ export function TaskProvider({ children }) {
       await cancelTaskReminders(task.notificationIds);
       await logTaskCompletion(task);
     }
-    const updated = tasks.map((t) =>
-      t.id === id ? { ...t, completed: true, progress: 100 } : t
-    );
+    const updated = tasks.map((t) => t.id === id ? { ...t, completed: true, progress: 100 } : t);
     await saveTasks(updated);
   };
 
@@ -128,33 +137,21 @@ export function TaskProvider({ children }) {
     await saveTasks(tasks.filter((t) => t.id !== id));
   };
 
-  // Share a task and return the generated code
   const shareTaskById = async (id) => {
     const task = tasks.find((t) => t.id === id);
     if (!task) return null;
     const code = await shareTask(task);
-    // Mark task as shared in local state
-    const updated = tasks.map((t) =>
-      t.id === id ? { ...t, isShared: true, shareCode: code } : t
-    );
+    const updated = tasks.map((t) => t.id === id ? { ...t, isShared: true, shareCode: code } : t);
     await saveTasks(updated);
     return code;
   };
 
-  // Join a task by share code
   const joinTaskByCode = async (code) => {
     const result = await joinSharedTask(code);
     if (!result.success) return result;
     const saveResult = await saveJoinedTask(result.task);
     if (!saveResult.success) return saveResult;
-    // Add to current task list
-    const newTask = {
-      ...result.task,
-      id: Date.now().toString(),
-      progress: 0,
-      completed: false,
-      notificationIds: [],
-    };
+    const newTask = { ...result.task, id: Date.now().toString(), progress: 0, completed: false, notificationIds: [] };
     await saveTasks([...tasks, newTask]);
     return { success: true };
   };
@@ -171,29 +168,17 @@ export function TaskProvider({ children }) {
     if (diff <= 0) return 'Overdue';
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours >= 24) {
-      const days = Math.floor(hours / 24);
-      return `${days}d left`;
-    }
+    if (hours >= 24) return `${Math.floor(hours / 24)}d left`;
     if (hours > 0) return `${hours}h ${minutes}m left`;
     return `${minutes}m left`;
   };
 
   return (
-    <TaskContext.Provider
-      value={{
-        tasks,
-        loading,
-        addTask,
-        updateProgress,
-        completeTask,
-        deleteTask,
-        shareTaskById,
-        joinTaskByCode,
-        getUrgency,
-        getTimeLeft,
-      }}
-    >
+    <TaskContext.Provider value={{
+      tasks, loading, addTask, updateTask, updateProgress,
+      toggleComplete, completeTask, deleteTask,
+      shareTaskById, joinTaskByCode, getUrgency, getTimeLeft,
+    }}>
       {children}
     </TaskContext.Provider>
   );

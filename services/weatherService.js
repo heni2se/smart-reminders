@@ -3,9 +3,8 @@ import { Platform } from 'react-native';
 
 const API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY;
 const CACHE_KEY = 'weather_cache';
-const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const CACHE_DURATION_MS = 30 * 60 * 1000;
 
-// Get coordinates — uses browser geolocation on web, expo-location on native
 function getCoordinates() {
   if (Platform.OS === 'web') {
     return new Promise((resolve, reject) => {
@@ -19,11 +18,10 @@ function getCoordinates() {
           longitude: pos.coords.longitude,
         }),
         (err) => reject(err),
-        { timeout: 10000, enableHighAccuracy: false }
+        { timeout: 20000, enableHighAccuracy: false, maximumAge: 60000 }
       );
     });
   } else {
-    // Native — use expo-location
     const Location = require('expo-location');
     return Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') throw new Error('Permission denied');
@@ -37,15 +35,28 @@ function getCoordinates() {
 
 export async function getWeather() {
   try {
-    // Check cache first
+    // Always return cache immediately if available, even if stale
     const cached = await AsyncStorage.getItem(CACHE_KEY);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       if (Date.now() - timestamp < CACHE_DURATION_MS) {
         return data;
       }
+      // Cache is stale but use it while fetching fresh data in background
+      fetchAndCacheWeather(); // fire and forget
+      return data;
     }
 
+    // No cache at all — must wait for fresh data
+    return await fetchAndCacheWeather();
+  } catch (error) {
+    console.error('Weather error:', error.message);
+    return getFallbackWeather('Could not load weather');
+  }
+}
+
+async function fetchAndCacheWeather() {
+  try {
     const { latitude, longitude } = await getCoordinates();
 
     const response = await fetch(

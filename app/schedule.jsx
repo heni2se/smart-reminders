@@ -1,22 +1,21 @@
 import React, { useState, useEffect } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
 } from "react-native";
 import { useClasses } from "../store/ClassContext";
 import { getUpcomingEvents, formatEventTime, formatEventDateLabel } from "../services/calendarService";
 import AddClassModal from "../components/AddClassModal";
+import EditClassModal from "../components/EditClassModal";
 import COLORS from "../constants/colors";
 
 export default function ScheduleScreen() {
-  const { classes, getAttendanceRate, getTodaysClasses } = useClasses();
+  const { classes, getAttendanceRate, getTodaysClasses, markAttendance, deleteClass } = useClasses();
   const [modalVisible, setModalVisible] = useState(false);
+  const [editClass, setEditClass] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [calendarLoading, setCalendarLoading] = useState(true);
   const [showCalendar, setShowCalendar] = useState(true);
+  const [expandedClassId, setExpandedClassId] = useState(null);
 
   const todaysClasses = getTodaysClasses();
   const displayClasses = todaysClasses.length > 0 ? todaysClasses : classes;
@@ -44,7 +43,6 @@ export default function ScheduleScreen() {
     return { label: `${rate}% attendance — at risk`, bg: COLORS.dangerLight, color: COLORS.danger };
   }
 
-  // Group calendar events by date label
   const groupedEvents = calendarEvents.reduce((acc, event) => {
     const label = formatEventDateLabel(event.startDate);
     if (!acc[label]) acc[label] = [];
@@ -54,16 +52,16 @@ export default function ScheduleScreen() {
 
   return (
     <View style={styles.wrapper}>
-      <AddClassModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-      />
+      <AddClassModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+      {editClass && (
+        <EditClassModal
+          visible={!!editClass}
+          onClose={() => setEditClass(null)}
+          cls={editClass}
+        />
+      )}
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Schedule</Text>
           <Text style={styles.headerDate}>{today}</Text>
@@ -71,13 +69,10 @@ export default function ScheduleScreen() {
 
         {isShowingAll && (
           <View style={styles.noClassBanner}>
-            <Text style={styles.noClassText}>
-              📭 No classes scheduled today — showing full schedule
-            </Text>
+            <Text style={styles.noClassText}>📭 No classes scheduled today — showing full schedule</Text>
           </View>
         )}
 
-        {/* ── Classes ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Classes</Text>
         </View>
@@ -89,6 +84,7 @@ export default function ScheduleScreen() {
         ) : (
           displayClasses.map((cls, index) => {
             const badge = getAttendanceBadge(cls);
+            const isExpanded = expandedClassId === cls.id;
             return (
               <View key={cls.id} style={styles.timelineRow}>
                 <View style={styles.timeColumn}>
@@ -97,22 +93,51 @@ export default function ScheduleScreen() {
                 </View>
                 <View style={styles.lineColumn}>
                   <View style={[styles.dot, { backgroundColor: cls.color }]} />
-                  {index < displayClasses.length - 1 && (
-                    <View style={styles.verticalLine} />
-                  )}
+                  {index < displayClasses.length - 1 && <View style={styles.verticalLine} />}
                 </View>
                 <View style={[styles.classCard, { borderLeftColor: cls.color }]}>
-                  <View style={styles.cardTopRow}>
-                    <Text style={styles.className}>{cls.name}</Text>
-                    <Text style={styles.courseCode}>{cls.courseCode}</Text>
-                  </View>
-                  <Text style={styles.roomText}>📍 {cls.room}</Text>
-                  <Text style={styles.daysText}>🗓 {cls.days.join(", ")}</Text>
-                  {badge && (
-                    <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                      <Text style={[styles.badgeText, { color: badge.color }]}>
-                        {badge.label}
-                      </Text>
+                  <TouchableOpacity onPress={() => setExpandedClassId(isExpanded ? null : cls.id)}>
+                    <View style={styles.cardTopRow}>
+                      <Text style={styles.className}>{cls.name}</Text>
+                      <Text style={styles.courseCode}>{cls.courseCode}</Text>
+                    </View>
+                    <Text style={styles.roomText}>📍 {cls.room}</Text>
+                    <Text style={styles.daysText}>🗓 {cls.days.join(", ")}</Text>
+                    {badge && (
+                      <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                        <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Expanded actions */}
+                  {isExpanded && (
+                    <View style={styles.expandedSection}>
+                      <Text style={styles.expandedLabel}>Mark Attendance</Text>
+                      <View style={styles.attendanceRow}>
+                        <TouchableOpacity
+                          style={[styles.attendBtn, { backgroundColor: COLORS.successLight, borderColor: COLORS.success }]}
+                          onPress={() => { markAttendance(cls.id, true); setExpandedClassId(null); }}
+                        >
+                          <Text style={[styles.attendBtnText, { color: COLORS.success }]}>✓ Attended</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.attendBtn, { backgroundColor: COLORS.dangerLight, borderColor: COLORS.danger }]}
+                          onPress={() => { markAttendance(cls.id, false); setExpandedClassId(null); }}
+                        >
+                          <Text style={[styles.attendBtnText, { color: COLORS.danger }]}>✗ Missed</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.actionBtn}
+                          onPress={() => { setEditClass(cls); setExpandedClassId(null); }}>
+                          <Text style={styles.actionBtnText}>✏️ Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]}
+                          onPress={() => deleteClass(cls.id)}>
+                          <Text style={[styles.actionBtnText, { color: COLORS.danger }]}>🗑 Delete</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   )}
                 </View>
@@ -121,7 +146,7 @@ export default function ScheduleScreen() {
           })
         )}
 
-        {/* ── Calendar Events ── */}
+        {/* Calendar Events */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Calendar Events</Text>
           <TouchableOpacity onPress={() => setShowCalendar((p) => !p)}>
@@ -137,9 +162,7 @@ export default function ScheduleScreen() {
               </View>
             ) : calendarEvents.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>
-                  No upcoming events — allow calendar access to see them here
-                </Text>
+                <Text style={styles.emptyText}>No upcoming events — allow calendar access to see them here</Text>
               </View>
             ) : (
               Object.entries(groupedEvents).map(([dateLabel, events]) => (
@@ -148,23 +171,13 @@ export default function ScheduleScreen() {
                   {events.map((event) => (
                     <View key={event.id} style={styles.eventCard}>
                       <View style={styles.eventTimeCol}>
-                        <Text style={styles.eventTime}>
-                          {formatEventTime(event.startDate)}
-                        </Text>
-                        <Text style={styles.eventTimeEnd}>
-                          {formatEventTime(event.endDate)}
-                        </Text>
+                        <Text style={styles.eventTime}>{formatEventTime(event.startDate)}</Text>
+                        <Text style={styles.eventTimeEnd}>{formatEventTime(event.endDate)}</Text>
                       </View>
                       <View style={styles.eventContent}>
-                        <Text style={styles.eventTitle} numberOfLines={1}>
-                          {event.title}
-                        </Text>
-                        {event.location ? (
-                          <Text style={styles.eventDetail}>📍 {event.location}</Text>
-                        ) : null}
-                        {event.calendarName ? (
-                          <Text style={styles.eventDetail}>🗓 {event.calendarName}</Text>
-                        ) : null}
+                        <Text style={styles.eventTitle} numberOfLines={1}>{event.title}</Text>
+                        {event.location ? <Text style={styles.eventDetail}>📍 {event.location}</Text> : null}
+                        {event.calendarName ? <Text style={styles.eventDetail}>🗓 {event.calendarName}</Text> : null}
                       </View>
                     </View>
                   ))}
@@ -177,11 +190,7 @@ export default function ScheduleScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setModalVisible(true)}
-        activeOpacity={0.85}
-      >
+      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)} activeOpacity={0.85}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>
@@ -195,15 +204,9 @@ const styles = StyleSheet.create({
   header: { marginBottom: 20 },
   headerTitle: { fontSize: 26, fontWeight: "700", color: COLORS.textPrimary },
   headerDate: { fontSize: 14, color: COLORS.textSecondary, marginTop: 2 },
-  noClassBanner: {
-    backgroundColor: COLORS.warningLight, borderRadius: 12,
-    padding: 12, marginBottom: 20,
-  },
+  noClassBanner: { backgroundColor: COLORS.warningLight, borderRadius: 12, padding: 12, marginBottom: 20 },
   noClassText: { fontSize: 13, color: COLORS.warning, fontWeight: "500" },
-  sectionHeader: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 12, marginTop: 8,
-  },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, marginTop: 8 },
   sectionTitle: { fontSize: 17, fontWeight: "700", color: COLORS.textPrimary },
   toggleText: { fontSize: 13, color: COLORS.primary, fontWeight: "600" },
   timelineRow: { flexDirection: "row", marginBottom: 20, alignItems: "flex-start" },
@@ -212,42 +215,26 @@ const styles = StyleSheet.create({
   timeTextEnd: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
   lineColumn: { width: 20, alignItems: "center", paddingTop: 4 },
   dot: { width: 12, height: 12, borderRadius: 6, zIndex: 1 },
-  verticalLine: {
-    width: 2, flex: 1, backgroundColor: COLORS.border,
-    marginTop: 4, minHeight: 60,
-  },
-  classCard: {
-    flex: 1, backgroundColor: COLORS.surface, borderRadius: 14,
-    padding: 14, borderLeftWidth: 4, marginLeft: 8,
-    shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
-  },
-  cardTopRow: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 6,
-  },
+  verticalLine: { width: 2, flex: 1, backgroundColor: COLORS.border, marginTop: 4, minHeight: 60 },
+  classCard: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, borderLeftWidth: 4, marginLeft: 8, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   className: { fontSize: 15, fontWeight: "700", color: COLORS.textPrimary, flex: 1 },
-  courseCode: {
-    fontSize: 12, fontWeight: "600", color: COLORS.textSecondary,
-    backgroundColor: COLORS.background, paddingHorizontal: 8,
-    paddingVertical: 3, borderRadius: 6,
-  },
+  courseCode: { fontSize: 12, fontWeight: "600", color: COLORS.textSecondary, backgroundColor: COLORS.background, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   roomText: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 3 },
   daysText: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 8 },
-  badge: {
-    alignSelf: "flex-start", paddingHorizontal: 10,
-    paddingVertical: 4, borderRadius: 8,
-  },
+  badge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: "600" },
-  dateLabelText: {
-    fontSize: 13, fontWeight: "700", color: COLORS.textSecondary,
-    marginBottom: 8, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5,
-  },
-  eventCard: {
-    flexDirection: "row", backgroundColor: COLORS.surface,
-    borderRadius: 12, padding: 12, marginBottom: 8,
-    borderLeftWidth: 3, borderLeftColor: COLORS.primary,
-    shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-  },
+  expandedSection: { marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10 },
+  expandedLabel: { fontSize: 11, fontWeight: "700", color: COLORS.textSecondary, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+  attendanceRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  attendBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  attendBtnText: { fontSize: 13, fontWeight: "700" },
+  actionRow: { flexDirection: "row", gap: 8 },
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
+  actionBtnDanger: { borderColor: COLORS.dangerLight, backgroundColor: COLORS.dangerLight },
+  actionBtnText: { fontSize: 12, fontWeight: "600", color: COLORS.textSecondary },
+  dateLabelText: { fontSize: 13, fontWeight: "700", color: COLORS.textSecondary, marginBottom: 8, marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5 },
+  eventCard: { flexDirection: "row", backgroundColor: COLORS.surface, borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: COLORS.primary, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   eventTimeCol: { width: 60, marginRight: 10 },
   eventTime: { fontSize: 12, fontWeight: "600", color: COLORS.textPrimary },
   eventTimeEnd: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
@@ -256,14 +243,6 @@ const styles = StyleSheet.create({
   eventDetail: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
   emptyState: { alignItems: "center", paddingVertical: 20 },
   emptyText: { fontSize: 14, color: COLORS.textMuted, textAlign: "center" },
-  fab: {
-    position: "absolute", bottom: 32, right: 24,
-    width: 58, height: 58, borderRadius: 29,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center", alignItems: "center",
-    shadowColor: COLORS.primary, shadowOpacity: 0.4,
-    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
+  fab: { position: "absolute", bottom: 32, right: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: COLORS.primary, justifyContent: "center", alignItems: "center", shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   fabText: { color: "#fff", fontSize: 28, fontWeight: "300", lineHeight: 32 },
 });
